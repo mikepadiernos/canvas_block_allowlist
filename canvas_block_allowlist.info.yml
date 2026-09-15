@@ -1,0 +1,7 @@
+name: Canvas Block Allowlist
+type: module
+description: Provides Drush commands to inspect the Canvas block allowlist.
+package: Custom
+core_version_requirement: ^11
+dependencies:
+  - drupal:canvas
