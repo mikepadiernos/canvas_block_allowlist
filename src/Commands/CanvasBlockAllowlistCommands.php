@@ -30,7 +30,16 @@ final class CanvasBlockAllowlistCommands extends DrushCommands {
   #[CLI\Command(name: 'canvas-block-allowlist:list', aliases: ['cbal-list'])]
   #[CLI\Usage(name: 'drush canvas-block-allowlist:list', description: 'Show configured allowlist, currently allowed blocks, and all block components that can be allowed.')]
   public function list(): int {
-    $allowlistPath = dirname(DRUPAL_ROOT) . '/config/canvas-block-allowlist.yml';
+    $projectRoot = dirname(DRUPAL_ROOT);
+    $allowlistPath = $projectRoot . '/assets/config/canvas/canvas-block-allowlist.yml';
+    $legacyAllowlistPath = $projectRoot . '/config/canvas/canvas-block-allowlist.yml';
+    $olderAllowlistPath = $projectRoot . '/config/canvas-block-allowlist.yml';
+    if (!is_file($allowlistPath) && is_file($legacyAllowlistPath)) {
+      $allowlistPath = $legacyAllowlistPath;
+    }
+    if (!is_file($allowlistPath) && is_file($olderAllowlistPath)) {
+      $allowlistPath = $olderAllowlistPath;
+    }
     $configured = $this->readConfiguredAllowlist($allowlistPath);
 
     $storage = $this->entityTypeManager->getStorage('component');

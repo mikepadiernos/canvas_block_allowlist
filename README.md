@@ -6,7 +6,7 @@ A small Drupal custom module that helps you review and manage which Canvas block
 
 This module adds a Drush command to compare:
 
-- the configured allowlist file at `config/canvas-block-allowlist.yml`
+- the configured allowlist file at `assets/config/canvas/canvas-block-allowlist.yml`
 - the block components currently enabled in Canvas
 - all block-based Canvas components available for allowlisting
 
@@ -29,7 +29,9 @@ This is useful when you want to quickly audit whether your allowlist matches the
 
 The module reads its configured allowlist from:
 
-- `config/canvas-block-allowlist.yml`
+- `assets/config/canvas/canvas-block-allowlist.yml`
+
+If the legacy project-root config files still exist, the command will fall back to those locations for compatibility.
 
 Example:
 
@@ -73,7 +75,7 @@ For each Canvas block component, the command displays:
 
 ## Notes
 
-- The file is read from the project config directory adjacent to the Drupal root (`../config/canvas-block-allowlist.yml` from the Drupal root).
+- The file is read from the project asset config directory adjacent to the Drupal root (`../assets/config/canvas/canvas-block-allowlist.yml` from the Drupal root, with legacy fallbacks to `../config/canvas/canvas-block-allowlist.yml` and `../config/canvas-block-allowlist.yml`).
 - If the file is missing or invalid YAML, the command treats it as empty and continues safely.
 
 ## Development
