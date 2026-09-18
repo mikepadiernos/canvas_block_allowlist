@@ -15,6 +15,12 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class CanvasBlockAllowlistCommands extends DrushCommands {
 
+  private const DEFAULT_ALLOWLIST_PATH = '/assets/config/canvas/canvas-block-allowlist.yml';
+
+  private const LEGACY_ALLOWLIST_PATH = '/config/canvas/canvas-block-allowlist.yml';
+
+  private const OLDER_ALLOWLIST_PATH = '/config/canvas-block-allowlist.yml';
+
   /**
    * Constructs a new command handler.
    */
@@ -30,16 +36,7 @@ final class CanvasBlockAllowlistCommands extends DrushCommands {
   #[CLI\Command(name: 'canvas-block-allowlist:list', aliases: ['cbal-list'])]
   #[CLI\Usage(name: 'drush canvas-block-allowlist:list', description: 'Show configured allowlist, currently allowed blocks, and all block components that can be allowed.')]
   public function list(): int {
-    $projectRoot = dirname(DRUPAL_ROOT);
-    $allowlistPath = $projectRoot . '/assets/config/canvas/canvas-block-allowlist.yml';
-    $legacyAllowlistPath = $projectRoot . '/config/canvas/canvas-block-allowlist.yml';
-    $olderAllowlistPath = $projectRoot . '/config/canvas-block-allowlist.yml';
-    if (!is_file($allowlistPath) && is_file($legacyAllowlistPath)) {
-      $allowlistPath = $legacyAllowlistPath;
-    }
-    if (!is_file($allowlistPath) && is_file($olderAllowlistPath)) {
-      $allowlistPath = $olderAllowlistPath;
-    }
+    $allowlistPath = $this->resolveAllowlistPath();
     $configured = $this->readConfiguredAllowlist($allowlistPath);
 
     $storage = $this->entityTypeManager->getStorage('component');
@@ -97,6 +94,42 @@ final class CanvasBlockAllowlistCommands extends DrushCommands {
   }
 
   /**
+   * Enables a block component in Canvas and records it in the allowlist file.
+    *
+    * @param string $blockId
+    *   Canvas block component ID, for example block.system_branding_block or
+    *   system_branding_block.
+   */
+  #[CLI\Command(name: 'canvas-block-allowlist:add', aliases: ['cbal-add'])]
+  #[CLI\Usage(name: 'drush canvas-block-allowlist:add block.system_branding_block', description: 'Enable a block-backed Canvas component and add it to the allowlist YAML file.')]
+  #[CLI\Usage(name: 'drush canvas-block-allowlist:add system_branding_block', description: 'Enable a block-backed Canvas component by block plugin ID and add it to the allowlist YAML file.')]
+  public function add(string $blockId): int {
+    $component = $this->loadBlockComponent($blockId);
+    if (!$component instanceof Component) {
+      $normalized = $this->normalizeBlockComponentId($blockId);
+      $this->io()->error(sprintf('Canvas block component "%s" was not found.', $normalized));
+      return self::EXIT_FAILURE;
+    }
+
+    $allowlistPath = $this->resolveAllowlistPath();
+    $configured = $this->readConfiguredAllowlist($allowlistPath);
+    $componentId = $component->id();
+
+    if (!$component->status()) {
+      $component->enable()->save();
+    }
+
+    if (!in_array($componentId, $configured, TRUE)) {
+      $configured[] = $componentId;
+      sort($configured);
+      $this->writeConfiguredAllowlist($allowlistPath, $configured);
+    }
+
+    $this->io()->success(sprintf('Canvas block component "%s" is enabled and present in %s.', $componentId, $allowlistPath));
+    return self::EXIT_SUCCESS;
+  }
+
+  /**
    * Reads configured component IDs from the allowlist YAML file.
    *
    * @return list<string>
@@ -136,6 +169,94 @@ final class CanvasBlockAllowlistCommands extends DrushCommands {
     }
 
     return array_keys($normalized);
+  }
+
+  /**
+   * Writes configured component IDs to the allowlist YAML file.
+   *
+   * @param list<string> $configured
+   *   The component IDs to store.
+   */
+  private function writeConfiguredAllowlist(string $path, array $configured): void {
+    $directory = dirname($path);
+    if (!is_dir($directory) && !mkdir($directory, 0777, TRUE) && !is_dir($directory)) {
+      throw new \RuntimeException(sprintf('Unable to create allowlist directory "%s".', $directory));
+    }
+
+    $yaml = Yaml::dump(['blocks' => array_values($configured)], 4, 2);
+    if (file_put_contents($path, $yaml) === FALSE) {
+      throw new \RuntimeException(sprintf('Unable to write allowlist file "%s".', $path));
+    }
+  }
+
+  /**
+   * Resolves the preferred allowlist file path.
+   */
+  private function resolveAllowlistPath(): string {
+    $projectRoot = dirname(DRUPAL_ROOT);
+    $preferredPath = $projectRoot . self::DEFAULT_ALLOWLIST_PATH;
+    $legacyPath = $projectRoot . self::LEGACY_ALLOWLIST_PATH;
+    $olderPath = $projectRoot . self::OLDER_ALLOWLIST_PATH;
+
+    if (is_file($preferredPath)) {
+      return $preferredPath;
+    }
+    if (is_file($legacyPath)) {
+      return $legacyPath;
+    }
+    if (is_file($olderPath)) {
+      return $olderPath;
+    }
+
+    return $preferredPath;
+  }
+
+  /**
+   * Loads a block-backed Canvas component by full component ID or block ID.
+   */
+  private function loadBlockComponent(string $blockId): ?Component {
+    $normalizedId = $this->normalizeBlockComponentId($blockId);
+    $storage = $this->entityTypeManager->getStorage('component');
+    $component = $storage->load($normalizedId);
+    if ($component instanceof Component && $component->get('source') === 'block') {
+      return $component;
+    }
+
+    $matches = $storage->loadByProperties([
+      'source' => 'block',
+      'source_local_id' => $this->stripBlockComponentPrefix($blockId),
+    ]);
+    foreach ($matches as $match) {
+      if ($match instanceof Component) {
+        return $match;
+      }
+    }
+
+    return NULL;
+  }
+
+  /**
+   * Normalizes an input value to a Canvas block component ID.
+   */
+  private function normalizeBlockComponentId(string $blockId): string {
+    $normalized = trim($blockId);
+    if (str_starts_with($normalized, 'block.')) {
+      return $normalized;
+    }
+
+    return 'block.' . $normalized;
+  }
+
+  /**
+   * Strips the Canvas block component prefix from a component ID.
+   */
+  private function stripBlockComponentPrefix(string $blockId): string {
+    $normalized = trim($blockId);
+    if (str_starts_with($normalized, 'block.')) {
+      return substr($normalized, strlen('block.'));
+    }
+
+    return $normalized;
   }
 
 }

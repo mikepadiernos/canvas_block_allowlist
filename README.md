@@ -4,7 +4,7 @@ A small Drupal custom module that helps you review and manage which Canvas block
 
 ## Purpose
 
-This module adds a Drush command to compare:
+This module adds Drush commands to compare and update:
 
 - the configured allowlist file at `assets/config/canvas/canvas-block-allowlist.yml`
 - the block components currently enabled in Canvas
@@ -46,10 +46,22 @@ The command will normalize the list and compare the configured IDs against the a
 
 ## Usage
 
-Run:
+List current state:
 
 ```bash
 drush canvas-block-allowlist:list
+```
+
+Example in a DDEV-based local environment:
+
+```bash
+ddev drush canvas-block-allowlist:list
+```
+
+Add a block component to Canvas and the allowlist, for example the site branding block:
+
+```bash
+ddev drush canvas-block-allowlist:add system_branding_block
 ```
 
 Alias:
@@ -58,7 +70,13 @@ Alias:
 drush cbal-list
 ```
 
-The command prints three sections:
+Add alias:
+
+```bash
+drush cbal-add system_branding_block
+```
+
+The list command prints three sections:
 
 1. Configured allowlist file
 2. Currently allowed in Canvas
@@ -72,6 +90,12 @@ For each Canvas block component, the command displays:
 - label
 - whether it is enabled now
 - whether it is present in the allowlist file
+
+The add command:
+
+- enables the matching block-backed Canvas component
+- creates the allowlist file in `assets/config/canvas/` if it does not exist yet
+- adds the component ID to the `blocks` list if it is not already present
 
 ## Notes
 
